@@ -20,6 +20,10 @@ const board = new five.Board({io: new raspi()});
 
 let i = 0;
 
+//Check args
+let doRecognition = false;
+if (process.argv[0] == 'cat') doRecognition = true ;
+
 board.on('ready', () => {
   console.log('board is ready');
 
@@ -33,7 +37,10 @@ board.on('ready', () => {
 
   // Motion detected
   motion.on('motionstart', () => {
-    console.log('motionstart');
+    console.log('------- [motionstart] -------');
+
+    //Photo limit
+    if(i > 100) return;
 
     // Run raspistill command to take a photo with the camera module
     let filename = 'photo/image_'+i+'.jpg';
@@ -45,25 +52,31 @@ board.on('ready', () => {
       let timestamp = Date.now();
       i++;
 
+      if (doRecognition) {
       // Detect cats from photos
 
-      if((/jpg$/).test(filename)) { // Ignore the temp filenames like image_001.jpg~
-        let imgPath = __dirname + '/' + filename;
+        if((/jpg$/).test(filename)) { // Ignore the temp filenames like image_001.jpg~
+          let imgPath = __dirname + '/' + filename;
 
-        // Child process: read the file and detect cats with KittyDar
-        let args = [imgPath];
-        let fork = child_process.fork(__dirname + '/detectCatsFromPhoto.js');
-        fork.send(args);
+          // Child process: read the file and detect cats with KittyDar
+          let args = [imgPath];
+          let fork = child_process.fork(__dirname + '/detectCatsFromPhoto.js');
+          fork.send(args);
 
-        // the child process is completed
-        fork.on('message', (base64) => {
-          if(base64) {
-            uploadToCloudinary(base64, timestamp);
-          }
+          // the child process is completed
+          fork.on('message', (base64) => {
+            if(base64) {
+              uploadToCloudinary(base64, timestamp);
+            }
 
-          // Once done, delete the photo to clear up the space
-          deletePhoto(imgPath);
-        });
+            // Once done, delete the photo to clear up the space
+            deletePhoto(imgPath);
+          });
+        }
+      }
+      else {
+        uploadToCloudinary(, timestamp);
+        deletePhoto(imgPath); //TODO review
       }
 
     })
@@ -71,7 +84,7 @@ board.on('ready', () => {
 
   // 'motionend' events
   motion.on('motionend', () => {
-    console.log('motionend');
+    console.log('------- [motionend] -------');
   });
 });
 
@@ -105,33 +118,6 @@ function publish(url, timestamp) {
   });
 }
 
-// Nexmo to send SMS
-
-const Nexmo = require('nexmo');
-
-const nexmo = new Nexmo({
-  apiKey: config.nexmo.api_key,
-  apiSecret: config.nexmo.api_secret
-});
-
-function sendSMS(url, timestamp) {
-  var t = new Date(timestamp).toLocaleString();
-  let msg = '🐈 detected on '+ t + '! See the photo at: ' + url;
-  nexmo.message.sendSms(
-    config.nexmo.fromNumber,
-    config.nexmo.toNumber,
-    msg,
-    {type: 'unicode'},
-    (err, responseData) => {
-      if (err) {
-        console.log(err);
-      } else {
-        console.dir(responseData);
-      }
-    }
-  );
-}
-
 // Cloudinary to store the photos
 
 const cloudinary = require('cloudinary');
@@ -150,7 +136,22 @@ function uploadToCloudinary(base64Img, timestamp) {
   });
 }
 
-// Ctrl-C
-process.on('SIGINT', () => {
+
+// Handle user input
+
+const readline = require('readline');
+
+const rl = readline.createInterface({
+  input: process.stdin,
+  output: process.stdout
+});
+
+rl.on('SIGINT', () => {
+  console.log('Good Bye Fur Friend !');
   process.exit();
+});
+
+rl.on('line', (input) => {
+  doReco = !doReco;
+  console.log('Cat recognition now is  '+doRecognition);
 });
