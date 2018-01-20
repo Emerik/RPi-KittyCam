@@ -19,10 +19,14 @@ const five = require('johnny-five');
 const board = new five.Board({io: new raspi()});
 
 let i = 0;
+let maxPicture = 25;
+let lastPicture = Date.now();
+let lastHour = -1;
 
 //Check args
 let doRecognition = false;
-if (process.argv[0] == 'cat') doRecognition = true ;
+console.log('User arg : '+process.argv[2]);
+if (process.argv[2] == 'cat') doRecognition = true ;
 
 board.on('ready', () => {
   console.log('board is ready');
@@ -40,11 +44,31 @@ board.on('ready', () => {
     console.log('------- [motionstart] -------');
 
     //Photo limit
-    if(i > 100) return;
+    if(i > maxPicture){
+      console.log('Too many picture');
+      return;
+    }
+
+    if(Date.now() < lastPicture+2000){
+      console.log('Too short');
+      return;
+    }
+
+    if( i > 10 ){
+      console.log('Picture limit per hour reached !');
+      i = 0;
+      lastHour = new Date().getHours();
+      return;
+    }
+    console.log(new Date().getHours()+' : '+lastHour);
+    if(new Date().getHours() == lastHour){
+      console.log('Too many pictures this hour '+lastHour+'H');
+      return ;
+    }
 
     // Run raspistill command to take a photo with the camera module
     let filename = 'photo/image_'+i+'.jpg';
-    let args = ['-w', '320', '-h', '240', '-o', filename, '-t', '1'];
+    let args = ['-w', '1024', '-h', '780', '-o', filename, '-t', '1000'];
     let spawn = child_process.spawn('raspistill', args);
 
     spawn.on('exit', (code) => {
@@ -75,8 +99,8 @@ board.on('ready', () => {
         }
       }
       else {
-        uploadToCloudinary(, timestamp);
-        deletePhoto(imgPath); //TODO review
+        uploadToCloudinary(filename, timestamp);
+        deletePhoto(filename); //TODO review
       }
 
     })
@@ -130,9 +154,8 @@ cloudinary.config({
 
 function uploadToCloudinary(base64Img, timestamp) {
   cloudinary.uploader.upload(base64Img, (result) => {
-    console.log(result);
+    console.log(result.url);
     publish(result.url, timestamp); // Comment this out if you don't use PubNub
-    sendSMS(result.url, timestamp); // Comment this out if you don't use Nexmo
   });
 }
 
@@ -152,6 +175,8 @@ rl.on('SIGINT', () => {
 });
 
 rl.on('line', (input) => {
-  doReco = !doReco;
+  if(input == 'cat') doReco = !doReco;
+  if(input == 'reset') lastHour=-1;
+  console.log('Time '+new Date().toUTCString()+' LH:'+lastHour)
   console.log('Cat recognition now is  '+doRecognition);
 });
