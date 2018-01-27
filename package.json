@@ -6,14 +6,14 @@
   "dependencies": {
     "cloudinary": "^1.3.1",
     "johnny-five": "^0.9.56",
-    "pubnub": "^3.15.1",
+    "pubnub": "^4.19.0",
     "raspi-io": "^6.0.1"
   },
   "devDependencies": {},
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
     "start": "node kittyCam.js",
-    "start reco": "node kittycam.js cat" 
+    "start reco": "node kittycam.js cat"
   },
   "repository": {
     "type": "git",
